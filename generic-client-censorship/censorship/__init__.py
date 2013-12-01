@@ -9,9 +9,11 @@ Author: John Otto <jotto@eecs.northwestern.edu>
 #   (e.g. a or b for alpha or beta).
 __version__ = "1.0"
 
+import Queue
 import logging
-from Queue import Queue
+#from Queue import Queue
 from threading import Thread
+from host import Host
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -28,12 +30,14 @@ class RunLoop(Thread):
         Thread.__init__(self)
         self.daemon = True
 
-        self.q = Queue()
+        self.q = Queue.Queue()
 
         # keep handle to top-level run script
         self.bootstrap = kwargs.get("bootstrap")
 
-        self.interval = 3600
+        self.interval = 5
+
+        self.host = Host()
 
     def shutdown(self):
         self.q.put(RunLoop.ShutdownSignal())
@@ -41,10 +45,12 @@ class RunLoop(Thread):
     def run(self):
         while True:
             # add code here to run immediately
+
             try:
                 command = self.q.get(timeout=self.interval)
-            except QueueEmpty:
+            except Queue.Empty:
                 # add code here to run periodically
+                self.host.dnsRedirect()
                 continue
             if isinstance(command, RunLoop.ShutdownSignal):
                 break
@@ -61,3 +67,4 @@ def shutdown(block=True):
         _MAIN.shutdown()
     if block:
         _MAIN.join()
+
