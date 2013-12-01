@@ -1,0 +1,2 @@
+[paths]
+default = ssh://jot836@repos.aqualab.cs.northwestern.edu//srv/hg/projects/generic-client-censorship

@@ -1,0 +1,5 @@
+data/.hgignore.i
+data/README.i
+data/package/__init__.py.i
+data/censorship/__init__.py.i
+data/setup.py.i

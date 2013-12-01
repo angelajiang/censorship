@@ -1,0 +1,66 @@
+Author: John Otto <jotto@eecs.northwestern.edu>
+
+----------------------
+Creating a new package
+----------------------
+
+1) set up a new mercurial repo based on
+    projects/generic-client-package
+    - `cd ..; hg clone generic-client-package REPO_NAME`
+    - edit the 'default-push' entry in REPO_NAME/.hg/hgrc 
+        to point to your new remote repository
+
+2) change the package name to your package name
+    - `hg mv package PACKAGE_NAME`
+
+3) update the setup.py script:
+    - change 'package' to PACKAGE_NAME
+    - uncomment and set values for the author fields
+    - list any package dependencies in the
+        'install_requires' list
+
+--------------------
+Testing your package
+--------------------
+
+1) check out projects/generic-client-bootstrap
+
+2) add PACKAGE_NAME to the end of the "packages"
+    line in bootstrap.cfg
+
+3) create a symlink to PACKAGE_NAME in this repo
+    in generic-client-bootstrap/packages
+
+4) in generic-client-bootstrap, run `python shim.py`
+
+----------------------
+Deploying your package
+----------------------
+
+1) increment the __version__ variable in YOUR_PACKAGE.__version__
+
+2) create symlinks in the root of this repo to any
+    dependencies (e.g. projects/generic-client-nethelper)
+
+3) build the .egg distribution
+    - `python setup.py`
+
+4) publish the .egg file
+    - `scp dist/[PACKAGE_NAME]-[VERSION]-py2.X.egg aqualab:`
+    - log in to aqualab@sidamo
+    - `cd server-package-manager`
+    - `python add.py --channel [RELEASE_CHANNEL] [--needs_init] \
+            [--overwrite] ../[EGG_FILE]
+        - RELEASE_CHANNEL should be one of {release, beta, alpha}
+            and determines which clients will download this
+            version of your package
+        - set the "--needs_init" option if your package uses the
+            'init' and 'shutdown' framework. This will usually be
+            the case! The main exception is when you are developing
+            a _library_ that does not need to be initialized, but
+            is a listed dependency for another package.
+        - set the "--overwrite" option if you have already deployed
+            this version of the package. Note that some clients may
+            have already downloaded an earlier .egg file and may not
+            download this one! Better to increment the version and
+            force a new download.
