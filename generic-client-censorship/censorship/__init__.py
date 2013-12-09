@@ -9,11 +9,10 @@ Author: John Otto <jotto@eecs.northwestern.edu>
 #   (e.g. a or b for alpha or beta).
 __version__ = "1.0"
 
-import Queue
 import logging
-#from Queue import Queue
+from Queue import Queue
 from threading import Thread
-from host import Host
+from censorship import CensorshipTest
 
 
 _LOGGER = logging.getLogger(__name__)
@@ -30,14 +29,12 @@ class RunLoop(Thread):
         Thread.__init__(self)
         self.daemon = True
 
-        self.q = Queue.Queue()
+        self.q = Queue()
 
         # keep handle to top-level run script
         self.bootstrap = kwargs.get("bootstrap")
 
-        self.interval = 5
-
-        self.host = Host()
+        self.interval = 3600
 
     def shutdown(self):
         self.q.put(RunLoop.ShutdownSignal())
@@ -45,14 +42,21 @@ class RunLoop(Thread):
     def run(self):
         while True:
             # add code here to run immediately
-
+            self.test1 = CensorshipTest()
+            self.test1.start()
             try:
                 command = self.q.get(timeout=self.interval)
-            except Queue.Empty:
+            except QueueEmpty:
                 # add code here to run periodically
-                self.host.dnsRedirect()
+                if self.test1.is_alive():
+                    pass
+                else:
+                    self.test1.start()
                 continue
             if isinstance(command, RunLoop.ShutdownSignal):
+                self.test1.shutdown()
+                self.test1.join()
+                _LOGGER.info("Testing is closed gracefully")
                 break
 
 
@@ -67,4 +71,3 @@ def shutdown(block=True):
         _MAIN.shutdown()
     if block:
         _MAIN.join()
-
