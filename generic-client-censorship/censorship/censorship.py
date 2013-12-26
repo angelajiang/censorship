@@ -32,8 +32,7 @@ class CensorshipTest(Thread):
         self.should_run = True
 
     def getUserApprovement(self):
-        """get user's approvement for censorhip test
-           This function may be no longer needed"""
+        #Get user's approvement for censorship test
         approvement = False
 
         try:
@@ -80,10 +79,10 @@ class CensorshipTest(Thread):
                     _LOGGER.info("Testing is closed")
                     break
                 
-                _LOGGER.info("Start testing for: %s" % url)
+                _LOGGER.info("Start testing for: %s\n" % url)
                 timeResponse = time()
-                dnsCanResolve, anaLookup, defaultDnsResponse, googleDnsResponse = self.getDNS(url)
-                if dnsCanResolve:
+                dnsResults = self.getDNS(url)
+                if dnsResults['dnsCanResolve']:
                     httpResponse = self.getHTTP(url)
                 else:
                     httpResponse = " "
@@ -91,13 +90,10 @@ class CensorshipTest(Thread):
                 result = dict()
                 result["timeResponse"] = timeResponse
                 result["url"] = url
-                result["dnsCanResolve"] = dnsCanResolve
-                result["anaLookup"] = anaLookup
-                result["defaultDnsResponse"] = defaultDnsResponse
-                result["googleDnsResponse"] = googleDnsResponse
+                result['dnsResults'] = dnsResults
                 result["httpResponse"] = httpResponse
-
-
+                
+                #reporting /test-dns or test-collateral
                 cattle.report("/test-dns-http", result, project="censorship")
                 _LOGGER.info("Finish testing: %s" % url)
                 #_LOGGER.info("result: %s" % repr(result))
@@ -117,12 +113,16 @@ class CensorshipTest(Thread):
            4. response of Google DNS server for the URL"""
         _LOGGER.info("getting DNS")
         dnsCanResolve = True
-        defaultDnsResponse = ""
-        googleDnsResponse = ""
+        dnsRedirected = True
         anaLookup = ""
         default_dns = dns.resolver.get_default_resolver()
         default_dns.lifetime = 1
-        
+        google_dns = dns.resolver.get_default_resolver()
+        google_dns.lifetime = 1
+        fakeurl = url = url.split('.') 
+        fakeurl.append('fake')
+
+        #Use default DNS
         try:
             a1 = default_dns.query(url)
             defaultDnsResponse = a1.response.to_text()
@@ -130,25 +130,40 @@ class CensorshipTest(Thread):
             dnsCanResolve = False
             defaultDnsResponse = e.__str__()
             _LOGGER.warn("Failed to get default DNS response")
+
+        #Use default DNS to test for DNS injection/redirection
+        try:
+            b1 = default_dns.query(fakeurl)
+            redirectDnsResponse = b1.response.to_text()
+        except Exception as e:
+            dnsRedirected = False
+            redirectDnsResponse = e.__str__()
+            _LOGGER.warn("Did not detect DNS injection or redirection")
+
+        #ANA lookup
         try:
             a3 = default_dns.query("nh-%s.ana-aqualab.cs.northwestern.edu" % cattle.getclientid())
             anaLookup = a3.response.to_text()
         except Exception as e:
             anaLookup = e.__str__()
             _LOGGER.warn("Failed to get Ana lookup")
+
+        #Use google public DNS
         try:
-            default_dns.nameservers = ['8.8.8.8', '8.8.4.4']
-            a2 = default_dns.query(url)
+            google_dns.nameservers = ['8.8.8.8', '8.8.4.4']
+            a2 = google_dns.query(url)
             googleDnsResponse = a2.response.to_text()
         except Exception as e:
             googleDnsResponse = e.__str__()
             _LOGGER.warn("Failed to get Google DNS response")
 
         dns.resolver.restore_system_resolver()
-        return (dnsCanResolve, anaLookup, defaultDnsResponse, googleDnsResponse)
+
+        dnsResults = dict(dnsCanResolve=dnsCanResolve, anaLookup=anaLookup,defaultDnsResponse=defaultDnsResponse,dnsRedirected=dnsRedirected, redirectDnsResponse=redirectDnsResponse, googleDnsResponse=googleDnsResponse)
+        return dnsResults
 
     def getHTTP(self, url):
-        "get HTTP response with socket and hopefully can detect TCP RST"
+        #get HTTP response with socket and hopefully can detect TCP RST"
         _LOGGER.info("getting HTTP")
         request = "GET / HTTP/1.1\r\nHost: " + url + "\r\n\r\n"
         httpResponse = ""
