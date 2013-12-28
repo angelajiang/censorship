@@ -117,9 +117,7 @@ class CensorshipTest(Thread):
         anaLookup = ""
         default_dns = dns.resolver.get_default_resolver()
         default_dns.lifetime = 1
-        google_dns = dns.resolver.get_default_resolver()
-        google_dns.lifetime = 1
-        fakeurl = url = url.split('.') 
+        fakeurl = url.split('.') 
         fakeurl.append('fake')
 
         #Use default DNS
@@ -129,7 +127,11 @@ class CensorshipTest(Thread):
         except Exception as e:
             dnsCanResolve = False
             defaultDnsResponse = e.__str__()
-            _LOGGER.warn("Failed to get default DNS response")
+            _LOGGER.warn("Failed to get default DNS response from default DNS")
+            _LOGGER.warn(defaultDnsResponse)
+
+        google_dns = dns.resolver.get_default_resolver()
+        google_dns.lifetime = 1
 
         #Use default DNS to test for DNS injection/redirection
         try:
