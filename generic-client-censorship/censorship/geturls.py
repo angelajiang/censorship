@@ -10,11 +10,18 @@ def populate_db(dbpath, csvfilename, tablename):
     with open(csvfilename, 'rb') as csvfile:
         urls = csv.reader(csvfile, delimiter=',', quotechar='|')
         for row in urls:
-            print row
             #row[0], row[1], row[3]: area, url, category
+            try:
+                if row[1][:7] == 'http://':
+                    row[1] = row[1][7:]
+                elif row[1][:8] == 'https://':
+                    row[1] = row[1][8:]
+            except:
+                pass
             try:
                 QUERY = 'insert into '+tablename+' values (?,?,?)'
                 c.execute(QUERY, (row[0], row[1], row[3]))
+                print row[0], row[1], row[3]
             except:
                 print 'Error: Row was not ented into db!'
                 print row
@@ -35,7 +42,9 @@ def get_urls_by_area(dbpath, tablename, area):
     conn.commit()
     conn.close()
     
+    return urllist
+
 if __name__ == '__main__':
-    #populate_db('urls.db', 'URLLists.csv', 'urllist')
-    get_urls_by_area('urls.db', 'urllist', 'glo')
+    populate_db('urls.db', 'URLLists.csv', 'urllist')
+    #get_urls_by_area('urls.db', 'urllist', 'glo')
 
