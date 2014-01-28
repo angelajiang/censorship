@@ -7,13 +7,18 @@ import socket
 import logging
 import os
 import subprocess
+import urllib2
 import ConfigParser
 import dns.resolver
+from pprint import pprint
 from time import sleep, time
 from threading import Thread
 from manager.remote_config import RemoteConfig
+
 import cattle
 import traceback
+import geturls
+import helpers
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -68,34 +73,37 @@ class CensorshipTest(Thread):
         self.should_run = True
         _LOGGER.info("Run censorship test")
         try:
-            #get list of urls to test
+            """ Get list of URLs to test"""
             response = self.remote_config.get(("namehelp", "experiments", "censorship", "urls"))
             _LOGGER.info("Got response: %s" % str(response))
             urlsToTest = response.get("response", [])
+            # Currently gets static list of globally censored urls
+            urlsToTest = geturls.get_urls_by_area('/Users/angelajiang/code/repos/censorship/generic-client-censorship/censorship/urls.db', 'urllist', 'glo')
             
             for url in urlsToTest:
-
                 if self.should_run == False:
                     _LOGGER.info("Testing is closed")
                     break
-                
-                _LOGGER.info("Start testing for: %s\n" % url)
+                if helpers.is_ip(url):
+                    _LOGGER.info('URL is an IP address\n\n\n\n\n')
+                    continue
+                _LOGGER.info("Start testing for: %s" % url)
                 timeResponse = time()
                 dnsResults = self.getDNS(url)
                 if dnsResults['dnsCanResolve']:
-                    httpResponse = self.getHTTP(url)
+                    httpResults = self.getHTTP(url)
                 else:
-                    httpResponse = " "
+                    httpResults= None
 
                 result = dict()
                 result["timeResponse"] = timeResponse
                 result["url"] = url
                 result['dnsResults'] = dnsResults
-                result["httpResponse"] = httpResponse
-                
+                result["httpResults"] = httpResults
+                pprint(httpResults) 
                 #reporting /test-dns or test-collateral
                 cattle.report("/test-dns-http", result, project="censorship")
-                _LOGGER.info("Finish testing: %s" % url)
+                _LOGGER.info("Finish testing: %s\n" % url)
                 #_LOGGER.info("result: %s" % repr(result))
         
         except Exception, e:
@@ -119,15 +127,17 @@ class CensorshipTest(Thread):
         default_dns.lifetime = 1
         fakeurl = url.split('.') 
         fakeurl.append('fake')
+        fakeurl = ('.').join(fakeurl)
 
         #Use default DNS
         try:
             a1 = default_dns.query(url)
             defaultDnsResponse = a1.response.to_text()
+            _LOGGER.warn("default dns: SUCCESS")
         except Exception as e:
             dnsCanResolve = False
             defaultDnsResponse = e.__str__()
-            _LOGGER.warn("Failed to get default DNS response from default DNS")
+            _LOGGER.warn("default dns: FAIL")
             _LOGGER.warn(defaultDnsResponse)
 
         google_dns = dns.resolver.get_default_resolver()
@@ -137,27 +147,29 @@ class CensorshipTest(Thread):
         try:
             b1 = default_dns.query(fakeurl)
             redirectDnsResponse = b1.response.to_text()
+            _LOGGER.warn("dns injection: DETECTED")
         except Exception as e:
             dnsRedirected = False
             redirectDnsResponse = e.__str__()
-            _LOGGER.warn("Did not detect DNS injection or redirection")
+            warning = "dns injection: NOT DETECTED "
+            _LOGGER.warn(warning)
 
         #ANA lookup
         try:
             a3 = default_dns.query("nh-%s.ana-aqualab.cs.northwestern.edu" % cattle.getclientid())
             anaLookup = a3.response.to_text()
+            _LOGGER.warn("ana lookup: SUCCESS")
         except Exception as e:
             anaLookup = e.__str__()
-            _LOGGER.warn("Failed to get Ana lookup")
-
-        #Use google public DNS
+            _LOGGER.warn("ana lookup: FAIL")
         try:
             google_dns.nameservers = ['8.8.8.8', '8.8.4.4']
             a2 = google_dns.query(url)
             googleDnsResponse = a2.response.to_text()
+            _LOGGER.warn("google dns: SUCCESS")
         except Exception as e:
             googleDnsResponse = e.__str__()
-            _LOGGER.warn("Failed to get Google DNS response")
+            _LOGGER.warn("google dns: FAIL")
 
         dns.resolver.restore_system_resolver()
 
@@ -165,10 +177,19 @@ class CensorshipTest(Thread):
         return dnsResults
 
     def getHTTP(self, url):
-        #get HTTP response with socket and hopefully can detect TCP RST"
-        _LOGGER.info("getting HTTP")
+        '''Try to get content. If no response, try to set up TCP connection'''
+        http_results = dict(canGetContent=False, content='')
+        _LOGGER.info("Starting HTTP tests")
+        url_with_http = helpers.add_header(url, "http://")
+        try:
+            content = urllib2.urlopen(url_with_http).read()
+            _LOGGER.warn("get content from url: SUCCESS")
+            http_results['canGetContent'] = True
+            http_results['content'] = content
+        except:
+            _LOGGER.warn("get content from url: FAIL")
+            
         request = "GET / HTTP/1.1\r\nHost: " + url + "\r\n\r\n"
-        httpResponse = ""
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(1)
@@ -184,5 +205,5 @@ class CensorshipTest(Thread):
         except Exception as e:
             httpResponse = e.__str__()
             _LOGGER.warn("Failed to get HTTP response")
-        return httpResponse
+        return http_results
 
