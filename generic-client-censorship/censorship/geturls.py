@@ -1,5 +1,6 @@
 import csv
 import sqlite3
+import helpers
 
 def populate_db(dbpath, csvfilename, tablename):
     """Inserts subset of data from urllist csv file to db"""
@@ -12,13 +13,8 @@ def populate_db(dbpath, csvfilename, tablename):
         for row in urls:
             #row[0], row[1], row[3]: area, url, category
             try:
-                if row[1][:7] == 'http://':
-                    row[1] = row[1][7:]
-                elif row[1][:8] == 'https://':
-                    row[1] = row[1][8:]
-            except:
-                pass
-            try:
+                row[1] = helpers.remove_header(row[1], 'http://')
+                row[1] = helpers.remove_header(row[1], 'https://')
                 QUERY = 'insert into '+tablename+' values (?,?,?)'
                 c.execute(QUERY, (row[0], row[1], row[3]))
                 print row[0], row[1], row[3]
